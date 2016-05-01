@@ -1,41 +1,30 @@
-FROM scratch
-ADD ubuntu-xenial-core-cloudimg-amd64-root.tar.gz /
+FROM ubuntu
 
-# a few minor docker-specific tweaks
-# see https://github.com/docker/docker/blob/master/contrib/mkimage/debootstrap
-RUN set -xe \
-	\
-	&& echo '#!/bin/sh' > /usr/sbin/policy-rc.d \
-	&& echo 'exit 101' >> /usr/sbin/policy-rc.d \
-	&& chmod +x /usr/sbin/policy-rc.d \
-	\
-	&& dpkg-divert --local --rename --add /sbin/initctl \
-	&& cp -a /usr/sbin/policy-rc.d /sbin/initctl \
-	&& sed -i 's/^exit.*/exit 0/' /sbin/initctl \
-	\
-	&& echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/docker-apt-speedup \
-	\
-	&& echo 'DPkg::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };' > /etc/apt/apt.conf.d/docker-clean \
-	&& echo 'APT::Update::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };' >> /etc/apt/apt.conf.d/docker-clean \
-	&& echo 'Dir::Cache::pkgcache ""; Dir::Cache::srcpkgcache "";' >> /etc/apt/apt.conf.d/docker-clean \
-	\
-	&& echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/docker-no-languages \
-	\
-	&& echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > /etc/apt/apt.conf.d/docker-gzip-indexes
+RUN apt-get -y update
+RUN apt-get -y install git python-dev python-serial python-tz python-gevent python-openssl
+RUN apt-get -y install mercurial python-setuptools python-louie python-sphinx make build-essential libudev-dev g++
+RUN apt-get -y install python-pip vim
 
-# delete all the apt list files since they're big and get stale quickly
-RUN rm -rf /var/lib/apt/lists/*
-# this forces "apt-get update" in dependent images, which is also good
-
-# enable the universe
-RUN sed -i 's/^#\s*\(deb.*universe\)$/\1/g' /etc/apt/sources.list
-
-RUN apt-get install git python-dev python-serial python-tz python-gevent python-openssl
-RUN apt-get install python-pip
+RUN pip install cython==0.14
+RUN pip install sphinxcontrib-blockdiag sphinxcontrib-actdiag
+RUN pip install sphinxcontrib-nwdiag sphinxcontrib-seqdiag
 RUN pip install pyephem
 RUN pip install APScheduler
 RUN pip install gevent-websocket
 RUN pip install wsaccel ujson
+RUN pip install urwid louie
+#sudo cp -R openzwave/config /etc/openzwave
+#sudo chown -R pyto:root /etc/openzwave
+#sudo chmod 660 /etc/openzwave/options.xml
+#sudo chown pyto:pyto /dev/yourzwavestick
+#sudo chmod 770 /dev/yourzwavestick
 
-# overwrite this with 'CMD []' in a dependent Dockerfile
-CMD ["/bin/bash"]
+RUN mkdir /usr/local/pytomation
+RUN cd /usr/local/pytomation
+RUN git clone https://github.com/hammj/pytomation.git /usr/local/src/pytomation/
+RUN /usr/local/src/pytomation/install.sh
+RUN rm -rf /usr/local/src/pytomation
+
+RUN hg clone https://code.google.com/p/python-openzwave/ /usr/local/src/python-openzwave
+RUN git clone https://github.com/OpenZWave/open-zwave.git /usr/local/src/openzwave
+RUN make /usr/local/src/openzwave/cpp/build
